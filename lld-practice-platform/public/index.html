@@ -1,0 +1,66 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>LLD Mentor</title>
+  <style>
+    *{box-sizing:border-box} body{margin:0;font-family:Inter,Arial,sans-serif;background:#0b1020;color:#e8edf7}
+    header{padding:20px 8%;background:#111936;border-bottom:1px solid #263252;display:flex;justify-content:space-between;align-items:center}
+    .brand{font-size:22px;font-weight:800;color:#8ab4ff}.nav button{margin-left:8px}
+    main{max-width:1100px;margin:auto;padding:35px 20px}.hero{margin-bottom:28px}.hero h1{font-size:36px;margin:0 0 8px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}
+    .card,.panel{background:#121a30;border:1px solid #263252;border-radius:14px;padding:20px}
+    .card h3{margin-top:0}.badge{font-size:12px;padding:5px 9px;background:#233b69;border-radius:20px;color:#bcd3ff}
+    button{background:#6ea8fe;color:#07101f;border:0;border-radius:8px;padding:10px 14px;font-weight:700;cursor:pointer}
+    button.secondary{background:#263252;color:#e8edf7} button:hover{opacity:.9}
+    .hidden{display:none} .two{display:grid;grid-template-columns:1fr 1.2fr;gap:20px}
+    textarea{width:100%;min-height:95px;background:#0b1020;border:1px solid #33446e;color:#e8edf7;border-radius:8px;padding:12px;margin:6px 0 16px;resize:vertical}
+    label{font-weight:700;font-size:14px}.req li{margin:8px 0}.feedback h3{color:#8ab4ff}.good{color:#7ee787}.warn{color:#f2cc60}.score{font-size:42px;font-weight:800;color:#8ab4ff}
+    .attempt{display:flex;justify-content:space-between;align-items:center;margin:10px 0;padding:14px;border:1px solid #263252;border-radius:10px}
+    @media(max-width:760px){.two{grid-template-columns:1fr}.hero h1{font-size:28px}}
+  </style>
+</head>
+<body>
+<header><div class="brand">◈ LLD Mentor</div><div class="nav"><button class="secondary" onclick="showProblems()">Problems</button><button class="secondary" onclick="showHistory()">History</button></div></header>
+<main>
+  <section id="problemsView"><div class="hero"><h1>Practice LLD. Understand your design.</h1><p>Choose a problem, explain your approach, and receive explainable feedback instead of a single “correct answer”.</p></div><div id="problemGrid" class="grid"></div></section>
+  <section id="practiceView" class="hidden"></section>
+  <section id="feedbackView" class="hidden"></section>
+  <section id="historyView" class="hidden"></section>
+</main>
+<script>
+let problems=[], currentProblem=null;
+const $=id=>document.getElementById(id);
+function hide(){["problemsView","practiceView","feedbackView","historyView"].forEach(x=>$(x).classList.add("hidden"))}
+async function init(){problems=await fetch("/api/problems").then(r=>r.json());showProblems()}
+function showProblems(){hide();$("problemsView").classList.remove("hidden");$("problemGrid").innerHTML=problems.map(p=>`<div class="card"><span class="badge">${p.difficulty}</span><h3>${p.title}</h3><p>${p.description}</p><button onclick="start('${p.id}')">Start Practice →</button></div>`).join("")}
+function start(id){currentProblem=problems.find(p=>p.id===id);hide();$("practiceView").classList.remove("hidden");$("practiceView").innerHTML=`
+<div class="two"><div class="panel"><span class="badge">${currentProblem.difficulty}</span><h1>${currentProblem.title}</h1><p>${currentProblem.description}</p><h3>Requirements</h3><ul class="req">${currentProblem.requirements.map(x=>`<li>${x}</li>`).join("")}</ul><h3>Evaluation criteria</h3><p>${currentProblem.evaluationCriteria.join(" • ")}</p></div>
+<div class="panel"><h2>Your Design</h2>
+<label>Problem understanding & assumptions</label><textarea id="understanding" placeholder="What problem are you solving? What assumptions are you making?"></textarea>
+<label>Classes & responsibilities</label><textarea id="classes" placeholder="Class: responsibility..."></textarea>
+<label>Relationships & design decisions</label><textarea id="relationships" placeholder="Who owns what? Which interfaces or patterns did you choose and why?"></textarea>
+<label>Optional code / pseudocode</label><textarea id="code" placeholder="Optional implementation details..."></textarea>
+<button onclick="submitAttempt()">Submit for Feedback</button> <button class="secondary" onclick="showProblems()">Cancel</button>
+</div></div>`}
+async function submitAttempt(){
+ const submission={understanding:$("understanding").value,classes:$("classes").value,relationships:$("relationships").value,code:$("code").value};
+ const created=await fetch("/api/attempts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({problemId:currentProblem.id,submission})}).then(r=>r.json());
+ if(created.error)return alert(created.error);
+ const result=await fetch(`/api/attempts/${created.id}/submit`,{method:"POST"}).then(r=>r.json());
+ if(result.error)return alert(result.error);showFeedback(result);
+}
+function list(items,cls){return items?.length?`<ul class="${cls}">${items.map(x=>`<li>${x}</li>`).join("")}</ul>`:"<p>None identified.</p>"}
+function showFeedback(a){hide();$("feedbackView").classList.remove("hidden");const f=a.feedback||{};$("feedbackView").innerHTML=`
+<div class="panel feedback"><span class="badge">${a.status}</span><h1>Feedback for ${currentProblem?.title||a.problemId}</h1>
+<div class="score">${f.overallScore??"—"}<span style="font-size:16px"> / 10</span></div>
+<h3>✓ Strengths</h3>${list(f.strengths,"good")}
+<h3>⚠ Concerns</h3>${list(f.concerns,"warn")}
+<h3>💡 Suggested improvements</h3>${list(f.suggestions,"")}
+<h3>Criterion scores</h3><div class="grid">${Object.entries(f.scores||{}).map(([k,v])=>`<div class="card"><b>${k}</b><div class="score">${v}/10</div></div>`).join("")}</div>
+<p style="margin-top:20px"><button onclick="start(a.problemId)">Improve & Try Again</button> <button class="secondary" onclick="showHistory()">View History</button></p></div>`}
+async function showHistory(){hide();$("historyView").classList.remove("hidden");const attempts=await fetch("/api/attempts").then(r=>r.json());$("historyView").innerHTML=`<h1>Attempt History</h1><p>Review your previous designs and use feedback to improve.</p><div class="panel">${attempts.length?attempts.map(a=>`<div class="attempt"><div><b>${problems.find(p=>p.id===a.problemId)?.title||a.problemId}</b><br><small>${new Date(a.createdAt).toLocaleString()} • ${a.status}</small></div><div><b>${a.feedback?.overallScore??"—"}/10</b><button class="secondary" onclick='showFeedback(${JSON.stringify(a).replace(/'/g,"&#39;")})'>View</button></div></div>`).join(""):"<p>No attempts yet. Start your first practice problem!</p>"}</div>`}
+init();
+</script>
+</body></html>

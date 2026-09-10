@@ -1,0 +1,14 @@
+{
+  "name": "lld-practice-platform",
+  "version": "1.0.0",
+  "description": "Focused MVP for practicing Low-Level Design with explainable feedback",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^5.1.0"
+  }
+}
